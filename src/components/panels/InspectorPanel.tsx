@@ -36,7 +36,7 @@ export function InspectorPanel(p: InspectorProps) {
         <circle cx="11" cy="18" r="2.4" />
         <path d="M8.2 6.8l7.4 1M7 8l3 7.6M16.8 10.1l-4.6 6.2" />
       </svg>
-      <div className="text-[12px]" style={{ color: "var(--muted)" }}>
+      <div className="text-[12px]" style={{ color: "var(--text-muted)" }}>
         Select a node or an edge in the viewport
         <br />
         or in the Graph tab to edit its properties.
@@ -366,7 +366,7 @@ function EdgeInspector({ edge, ...p }: InspectorProps & { edge: GraphEdge }) {
 
       {/* read-only metrics */}
       <SectionTitle>Metrics</SectionTitle>
-      <div className="rounded-lg border p-2.5" style={{ borderColor: "var(--line)", background: "rgba(10,15,22,0.6)" }}>
+      <div className="rounded-lg border p-2.5" style={{ borderColor: "var(--line)", background: "var(--card-bg)" }}>
         <div className="flex items-center justify-between py-0.5">
           <span className="font-mono2 text-[10.5px] uppercase" style={{ color: "var(--faint)" }}>
             Source node
@@ -389,7 +389,7 @@ function EdgeInspector({ edge, ...p }: InspectorProps & { edge: GraphEdge }) {
           </span>
         </div>
         <div className="flex items-center justify-between py-0.5">
-          <span className="font-mono2 text-[10.5px] uppercase" style={{ color: "#7fd4da" }}>
+          <span className="font-mono2 text-[10.5px] uppercase" style={{ color: "var(--cyan)" }}>
             3D distance
           </span>
           <span className="font-display text-[15px] font-semibold" style={{ color: "var(--cyan)" }}>

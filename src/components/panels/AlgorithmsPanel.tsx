@@ -139,9 +139,9 @@ export function AlgorithmsPanel({ graph, runner }: AlgorithmsPanelProps) {
         <div
           className="rise-in mb-2 rounded-md border px-2.5 py-2 text-[11px] leading-snug"
           style={{
-            borderColor: "rgba(255,93,93,0.5)",
-            background: "rgba(255,93,93,0.08)",
-            color: "#ffb4b4",
+            borderColor: "rgba(var(--red-rgb),0.5)",
+            background: "rgba(var(--red-rgb),0.08)",
+            color: "var(--red)",
           }}
         >
           {warn}
@@ -188,8 +188,8 @@ export function AlgorithmsPanel({ graph, runner }: AlgorithmsPanelProps) {
               key={s}
               className="font-mono2 h-6 flex-1 text-[10.5px] transition-colors"
               style={{
-                background: runner.speed === s ? "rgba(255,178,36,0.16)" : "transparent",
-                color: runner.speed === s ? "var(--amber)" : "var(--muted)",
+                background: runner.speed === s ? "rgba(var(--amber-rgb),0.16)" : "transparent",
+                color: runner.speed === s ? "var(--amber)" : "var(--text-muted)",
               }}
               onClick={() => runner.setSpeed(s)}
             >
@@ -214,7 +214,7 @@ export function AlgorithmsPanel({ graph, runner }: AlgorithmsPanelProps) {
 
       <div
         className="rounded-lg border p-2.5"
-        style={{ borderColor: "var(--line)", background: "rgba(10,15,22,0.6)" }}
+        style={{ borderColor: "var(--line)", background: "var(--card-bg)" }}
       >
         {/* progress bar */}
         <div className="mb-2 h-1 overflow-hidden rounded-full" style={{ background: "var(--line)" }}>
@@ -316,7 +316,7 @@ export function AlgorithmsPanel({ graph, runner }: AlgorithmsPanelProps) {
       </div>
 
       <p className="font-mono2 mt-3 pb-4 text-[9.5px] leading-relaxed" style={{ color: "var(--faint)" }}>
-        Edges are traversed respecting <span style={{ color: "var(--muted)" }}>directed</span>: a
+        Edges are traversed respecting <span style={{ color: "var(--text-muted)" }}>directed</span>: a
         directed edge only allows source → target. BFS/DFS ignore weights; Dijkstra minimizes
         accumulated weight; A* adds the live 3D geometric distance to the target as heuristic —
         geometric distance ≠ edge weight.

@@ -30,8 +30,8 @@ export function GraphPanel({ graph, selection, onSelect, onFocusNode }: GraphPan
               aria-pressed={active}
               className="row-hover group flex w-full cursor-pointer items-center gap-2 rounded-md border px-2 py-1.5 text-left"
               style={{
-                borderColor: active ? "rgba(255,178,36,0.55)" : "transparent",
-                background: active ? "rgba(255,178,36,0.07)" : undefined,
+                borderColor: active ? "rgba(var(--amber-rgb),0.55)" : "transparent",
+                background: active ? "rgba(var(--amber-rgb),0.07)" : undefined,
               }}
               onClick={() => onSelect({ type: "node", id: n.id })}
             >
@@ -72,8 +72,8 @@ export function GraphPanel({ graph, selection, onSelect, onFocusNode }: GraphPan
               aria-pressed={active}
               className="row-hover flex w-full cursor-pointer items-center gap-2 rounded-md border px-2 py-1.5 text-left"
               style={{
-                borderColor: active ? "rgba(62,197,206,0.55)" : "transparent",
-                background: active ? "rgba(62,197,206,0.07)" : undefined,
+                borderColor: active ? "rgba(var(--cyan-rgb),0.55)" : "transparent",
+                background: active ? "rgba(var(--cyan-rgb),0.07)" : undefined,
               }}
               onClick={() => onSelect({ type: "edge", id: e.id })}
               title={e.label || undefined}
@@ -86,7 +86,7 @@ export function GraphPanel({ graph, selection, onSelect, onFocusNode }: GraphPan
                 <span style={{ color: "var(--faint)" }}> {e.directed ? "→" : "↔"} </span>
                 {labelOf(e.target)}
               </span>
-              <span className="chip" style={{ color: "var(--amber-soft)", borderColor: "rgba(255,178,36,0.3)" }}>
+              <span className="chip" style={{ color: "var(--amber-soft)", borderColor: "rgba(var(--amber-rgb),0.3)" }}>
                 w:{e.weight}
               </span>
             </button>

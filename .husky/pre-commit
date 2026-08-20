@@ -1,0 +1,11 @@
+#!/bin/sh
+set -eu
+
+. "$(git rev-parse --show-toplevel)/scripts/lib/shared.sh"
+cd "$(repo_root)"
+
+run_pm run lint
+run_pm run typecheck
+
+
+exec "$(git rev-parse --show-toplevel)/scripts/pre-commit"

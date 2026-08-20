@@ -1,0 +1,7 @@
+#!/bin/sh
+set -eu
+
+. "$(git rev-parse --show-toplevel)/scripts/lib/shared.sh"
+cd "$(repo_root)"
+
+run_pm run test

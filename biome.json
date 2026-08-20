@@ -1,0 +1,28 @@
+{
+	"vcs": {
+		"enabled": true,
+		"clientKind": "git",
+		"useIgnoreFile": true
+	},
+	"files": {
+		"ignoreUnknown": true,
+		"includes": ["**", "!public"]
+	},
+	"formatter": {
+		"enabled": true,
+		"indentStyle": "tab"
+	},
+	"linter": {
+		"enabled": true,
+		"rules": {
+			"preset": "recommended",
+			"a11y": {
+				"noAmbiguousAnchorText": "warn",
+				"noSvgWithoutTitle": "off"
+			},
+			"security": {
+				"noBlankTarget": "warn"
+			}
+		}
+	}
+}

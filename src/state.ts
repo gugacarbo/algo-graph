@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { Graph, GraphEdge, GraphNode, LabelSettings, Vec3 } from "./types";
-import { uid } from "./types";
+import type { CameraSettings, Graph, GraphEdge, GraphNode, LabelSettings, Vec3 } from "./types";
+import { DEFAULT_CAMERA_SETTINGS, uid } from "./types";
 import { DEFAULT_GRAPH } from "./data/defaultGraph";
 
 const STORAGE_KEY = "archigraph:v1";
@@ -8,6 +8,9 @@ const STORAGE_KEY = "archigraph:v1";
 interface Persisted {
   graph: Graph;
   labelSettings: LabelSettings;
+  particles: boolean;
+  reflections: boolean;
+  cameraSettings: CameraSettings;
 }
 
 function loadPersisted(): Persisted | null {
@@ -16,6 +19,8 @@ function loadPersisted(): Persisted | null {
     if (!raw) return null;
     const data = JSON.parse(raw) as Persisted;
     if (!data?.graph?.nodes?.length || !Array.isArray(data.graph.edges)) return null;
+    // Older payloads may lack cameraSettings — merge onto the defaults.
+    data.cameraSettings = { ...DEFAULT_CAMERA_SETTINGS, ...data.cameraSettings };
     return data;
   } catch {
     return null;
@@ -42,6 +47,12 @@ export interface GraphEditor {
   graph: Graph;
   labelSettings: LabelSettings;
   setLabelSettings: (s: LabelSettings) => void;
+  particles: boolean;
+  setParticles: (v: boolean) => void;
+  reflections: boolean;
+  setReflections: (v: boolean) => void;
+  cameraSettings: CameraSettings;
+  setCameraSettings: (s: CameraSettings) => void;
   addNode: (partial?: Partial<GraphNode>) => string;
   updateNode: (id: string, patch: Partial<GraphNode>) => void;
   moveNode: (id: string, position: Vec3) => void;
@@ -62,18 +73,26 @@ export function useGraphEditor(): GraphEditor {
   const [labelSettings, setLabelSettings] = useState<LabelSettings>(
     initial.current?.labelSettings ?? { name: true, weight: true, distance: false },
   );
+  const [particles, setParticles] = useState<boolean>(initial.current?.particles ?? true);
+  const [reflections, setReflections] = useState<boolean>(initial.current?.reflections ?? true);
+  const [cameraSettings, setCameraSettings] = useState<CameraSettings>(
+    initial.current?.cameraSettings ?? DEFAULT_CAMERA_SETTINGS,
+  );
 
   // Debounced persistence.
   useEffect(() => {
     const t = window.setTimeout(() => {
       try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify({ graph, labelSettings }));
+        localStorage.setItem(
+          STORAGE_KEY,
+          JSON.stringify({ graph, labelSettings, particles, reflections, cameraSettings }),
+        );
       } catch {
         /* storage full / private mode — ignore */
       }
     }, 350);
     return () => window.clearTimeout(t);
-  }, [graph, labelSettings]);
+  }, [graph, labelSettings, particles, reflections, cameraSettings]);
 
   const addNode = useCallback((partial?: Partial<GraphNode>) => {
     const id = uid("n");
@@ -173,6 +192,12 @@ export function useGraphEditor(): GraphEditor {
     graph,
     labelSettings,
     setLabelSettings,
+    particles,
+    setParticles,
+    reflections,
+    setReflections,
+    cameraSettings,
+    setCameraSettings,
     addNode,
     updateNode,
     moveNode,

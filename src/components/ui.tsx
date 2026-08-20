@@ -59,6 +59,30 @@ export function Dot({ color, pulse }: { color: string; pulse?: boolean }) {
   );
 }
 
+/** Toggle switch in the app's amber palette. */
+export function Switch({
+  checked,
+  onChange,
+  disabled,
+}: {
+  checked: boolean;
+  onChange: (v: boolean) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      disabled={disabled}
+      className={`sw ${checked ? "sw-on" : ""}`}
+      onClick={() => onChange(!checked)}
+    >
+      <span className="sw-thumb" />
+    </button>
+  );
+}
+
 /** Slider with an amber fill track. */
 export function Range({
   value,

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Viewport } from "./components/Viewport";
 import { TopBar } from "./components/TopBar";
+import { SettingsDialog } from "./components/SettingsDialog";
 import { GraphPanel } from "./components/panels/GraphPanel";
 import { InspectorPanel } from "./components/panels/InspectorPanel";
 import { AlgorithmsPanel } from "./components/panels/AlgorithmsPanel";
@@ -11,7 +12,7 @@ import type { GraphScene } from "./engine/GraphScene";
 import type { Graph, GraphEdge, GraphNode, Selection, Vec3 } from "./types";
 import { STATE_COLORS } from "./types";
 import type { EdgeAlgoState, NodeAlgoState } from "./algorithms/types";
-import { edgeDistance } from "./algorithms/graphUtils";
+import { edgeDistance, euclideanDistance } from "./algorithms/graphUtils";
 import { IconLink, IconLock, IconX } from "./components/icons";
 
 type Tab = "graph" | "inspector" | "algorithms";
@@ -38,6 +39,8 @@ export default function App() {
   });
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [layingOut, setLayingOut] = useState(false);
+  const [view2D, setView2D] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   const toastSeq = useRef(0);
   const layoutRaf = useRef(0);
@@ -309,7 +312,18 @@ export default function App() {
       selection?.type === "edge" ? (editor.graph.edges.find((e) => e.id === selection.id) ?? null) : null,
     [selection, editor.graph],
   );
-  const selectedDist = selectedEdge ? edgeDistance(editor.graph, selectedEdge) : null;
+  const selectedDist = useMemo(() => {
+    if (!selectedEdge) return null;
+    if (!view2D) return edgeDistance(editor.graph, selectedEdge);
+    // 2D: show the flattened (X/Y) distance, matching the viewport label.
+    const s = editor.graph.nodes.find((n) => n.id === selectedEdge.source);
+    const t = editor.graph.nodes.find((n) => n.id === selectedEdge.target);
+    if (!s || !t) return null;
+    return euclideanDistance(
+      { x: s.position.x, y: s.position.y, z: 0 },
+      { x: t.position.x, y: t.position.y, z: 0 },
+    );
+  }, [selectedEdge, editor.graph, view2D]);
 
   const statusHint = connect.active
     ? connect.sourceId
@@ -326,6 +340,8 @@ export default function App() {
       <TopBar
         locked={locked || layingOut}
         connectActive={connect.active}
+        view2D={view2D}
+        onView2D={setView2D}
         labelSettings={editor.labelSettings}
         onAddNode={() =>
           structuralGuard(() => {
@@ -340,6 +356,7 @@ export default function App() {
         onImport={handleImport}
         onLabelSettings={editor.setLabelSettings}
         onLoadSample={handleLoadSample}
+        onOpenSettings={() => setSettingsOpen(true)}
       />
 
       <div className="flex min-h-0 flex-1">
@@ -349,6 +366,10 @@ export default function App() {
             graph={editor.graph}
             selection={selection}
             labelSettings={editor.labelSettings}
+            particles={editor.particles}
+            reflections={editor.reflections}
+            view2D={view2D}
+            cameraSettings={editor.cameraSettings}
             connectActive={connect.active}
             connectSource={connect.sourceId}
             nodeStates={nodeStates}
@@ -368,7 +389,7 @@ export default function App() {
             >
               <div className="panel-title mb-1.5">Search states</div>
               <div className="flex flex-col gap-1">
-                <LegendRow color="#55677d" label="Unvisited" dim />
+                <LegendRow color="var(--faint)" label="Unvisited" dim />
                 <LegendRow color={STATE_COLORS.frontier} label="Frontier / discovered" />
                 <LegendRow color={STATE_COLORS.visiting} label="Visiting" />
                 <LegendRow color={STATE_COLORS.visited} label="Visited" />
@@ -382,8 +403,8 @@ export default function App() {
             <div
               className="rise-in absolute left-1/2 top-3 z-10 flex -translate-x-1/2 items-center gap-2 rounded-full border px-3 py-1.5"
               style={{
-                borderColor: "rgba(255,178,36,0.45)",
-                background: "rgba(13,18,26,0.88)",
+                borderColor: "rgba(var(--amber-rgb),0.45)",
+                background: "var(--overlay-bg)",
                 boxShadow: "0 6px 24px rgba(0,0,0,0.4)",
               }}
             >
@@ -407,8 +428,8 @@ export default function App() {
             <div
               className="rise-in absolute left-1/2 top-3 z-10 flex -translate-x-1/2 items-center gap-2 rounded-full border px-3 py-1.5"
               style={{
-                borderColor: "rgba(62,197,206,0.5)",
-                background: "rgba(13,18,26,0.88)",
+                borderColor: "rgba(var(--cyan-rgb),0.5)",
+                background: "var(--overlay-bg)",
               }}
             >
               <span style={{ color: "var(--cyan)" }}>
@@ -466,8 +487,8 @@ export default function App() {
                 type="button"
                 className="font-display h-9 flex-1 text-[11px] font-semibold uppercase tracking-[0.12em] transition-colors"
                 style={{
-                  color: tab === id ? "var(--amber)" : "var(--muted)",
-                  background: tab === id ? "rgba(255,178,36,0.06)" : "transparent",
+                  color: tab === id ? "var(--amber)" : "var(--text-muted)",
+                  background: tab === id ? "rgba(var(--amber-rgb),0.06)" : "transparent",
                   boxShadow: tab === id ? "inset 0 -2px 0 var(--amber)" : "none",
                 }}
                 onClick={() => setTab(id)}
@@ -506,25 +527,42 @@ export default function App() {
       {/* status bar */}
       <footer
         className="flex h-7 flex-none items-center gap-3 border-t px-3"
-        style={{ borderColor: "var(--line)", background: "#0c1219" }}
+        style={{ borderColor: "var(--line)", background: "var(--panel2)" }}
       >
         <span className="font-mono2 truncate text-[10.5px]" style={{ color: "var(--faint)" }}>
           {statusHint}
         </span>
         <span className="flex-1" />
         {selectedEdge && (
-          <span className="chip" style={{ color: "var(--cyan)", borderColor: "rgba(62,197,206,0.35)" }}>
+          <span className="chip" style={{ color: "var(--cyan)", borderColor: "rgba(var(--cyan-rgb),0.35)" }}>
             w:{selectedEdge.weight} · d:{selectedDist === null ? "—" : selectedDist.toFixed(2)}
           </span>
         )}
         <span className="chip">{editor.graph.nodes.length} nodes</span>
         <span className="chip">{editor.graph.edges.length} edges</span>
         {runner.status !== "idle" && (
-          <span className="chip" style={{ color: "var(--amber)", borderColor: "rgba(255,178,36,0.35)" }}>
+          <span className="chip" style={{ color: "var(--amber)", borderColor: "rgba(var(--amber-rgb),0.35)" }}>
             {runner.status === "finished" ? "search finished — Reset clears highlights" : `search: ${runner.status}`}
           </span>
         )}
       </footer>
+      {settingsOpen && (
+        <SettingsDialog
+          onClose={() => setSettingsOpen(false)}
+          labelSettings={editor.labelSettings}
+          onLabelSettings={editor.setLabelSettings}
+          particles={editor.particles}
+          onParticles={editor.setParticles}
+          reflections={editor.reflections}
+          onReflections={editor.setReflections}
+          cameraSettings={editor.cameraSettings}
+          onCameraSettings={editor.setCameraSettings}
+          onViewPreset={(preset) => sceneRef.current?.setViewPreset(preset)}
+          onExport={handleExport}
+          onImport={handleImport}
+          onLoadSample={handleLoadSample}
+        />
+      )}
     </div>
   );
 }
@@ -536,12 +574,12 @@ function LegendRow({ color, label, dim }: { color: string; label: string; dim?: 
         className="h-2.5 w-2.5 flex-none rounded-sm"
         style={{
           background: dim ? "transparent" : color,
-          border: dim ? "1px dashed #55677d" : "none",
+          border: dim ? "1px dashed var(--faint)" : "none",
           boxShadow: dim ? "none" : `0 0 8px ${color}66`,
           opacity: dim ? 0.8 : 1,
         }}
       />
-      <span className="font-mono2 text-[10.5px]" style={{ color: dim ? "var(--faint)" : "var(--muted)" }}>
+      <span className="font-mono2 text-[10.5px]" style={{ color: dim ? "var(--faint)" : "var(--text-muted)" }}>
         {label}
       </span>
     </div>

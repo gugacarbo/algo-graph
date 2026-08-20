@@ -4,6 +4,7 @@ import { Line2 } from "three/examples/jsm/lines/Line2.js";
 import { LineGeometry } from "three/examples/jsm/lines/LineGeometry.js";
 import { LineMaterial } from "three/examples/jsm/lines/LineMaterial.js";
 import type {
+  CameraSettings,
   Graph,
   GraphEdge,
   GraphNode,
@@ -11,6 +12,7 @@ import type {
   NodeKind,
   Selection,
   Vec3,
+  ViewPreset,
 } from "../types";
 import { DEFAULT_EDGE_COLOR, KIND_META, edgeColor, nodeColor, nodeRadius } from "../types";
 import type { EdgeAlgoState, NodeAlgoState } from "../algorithms/types";
@@ -74,6 +76,9 @@ const ALGO_EDGE_COLOR: Record<EdgeAlgoState, string> = {
   path: "#ff6b4a",
 };
 
+/** Visible half-height (world units) of the 2D orthographic view at zoom=1. */
+const ORTHO_HALF_H = 22;
+
 function makeKindGeometry(kind: NodeKind, size: number): THREE.BufferGeometry {
   const s = size;
   switch (kind) {
@@ -121,10 +126,12 @@ export class GraphScene {
   private renderer: THREE.WebGLRenderer;
   private scene = new THREE.Scene();
   private camera: THREE.PerspectiveCamera;
+  private ortho: THREE.OrthographicCamera;
   private controls: OrbitControls;
   private raycaster = new THREE.Raycaster();
   private pointerNdc = new THREE.Vector2();
   private ro: ResizeObserver;
+  private themeObserver: MutationObserver;
 
   private nodeRoot = new THREE.Group();
   private edgeRoot = new THREE.Group();
@@ -141,12 +148,27 @@ export class GraphScene {
   private nodeStates = new Map<string, NodeAlgoState>();
   private edgeStates = new Map<string, EdgeAlgoState>();
 
-  private dragging: { id: string; plane: THREE.Plane; offset: THREE.Vector3 } | null = null;
+  private dragging: { id: string; plane: THREE.Plane; offset: THREE.Vector3; dataZ: number } | null = null;
+  /** 0 = full 3D depth, 1 = everything flattened to Z=0. Animated on toggle. */
+  private zAnim: { from: number; to: number; t: number } | null = null;
   private downPos: { x: number; y: number } | null = null;
-  private focusTween: { fromT: THREE.Vector3; toT: THREE.Vector3; fromC: THREE.Vector3; toC: THREE.Vector3; t: number } | null = null;
+  private focusTween: {
+    fromT: THREE.Vector3;
+    toT: THREE.Vector3;
+    fromC: THREE.Vector3;
+    toC: THREE.Vector3;
+    t: number;
+    fromZoom?: number;
+    toZoom?: number;
+  } | null = null;
 
   private particles: THREE.Points;
   private shell: THREE.LineSegments;
+  private reflections = true;
+  private view2D = false;
+  private autoRotateSetting = false;
+  /** Seconds until auto-rotate may resume after the user last interacted. */
+  private interactionCool = 0;
   private clock = new THREE.Clock();
   private raf = 0;
   private alive = true;
@@ -156,6 +178,7 @@ export class GraphScene {
   private onPointerMoveB = (e: PointerEvent) => this.onPointerMove(e);
   private onPointerUpB = (e: PointerEvent) => this.onPointerUp(e);
   private onDblClickB = (e: MouseEvent) => this.onDblClick(e);
+  private onWheelB = () => (this.interactionCool = 2);
 
   constructor(container: HTMLElement, cb: GraphSceneCallbacks) {
     this.container = container;
@@ -174,12 +197,29 @@ export class GraphScene {
     this.camera = new THREE.PerspectiveCamera(50, w / h, 0.1, 600);
     this.camera.position.set(27, 19, 34);
 
+    // 2D mode renders through an orthographic camera — zero perspective
+    // distortion: pan/zoom never change node scale.
+    this.ortho = new THREE.OrthographicCamera(
+      (-ORTHO_HALF_H * w) / h,
+      (ORTHO_HALF_H * w) / h,
+      ORTHO_HALF_H,
+      -ORTHO_HALF_H,
+      0.1,
+      600,
+    );
+    this.ortho.position.copy(this.camera.position);
+
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
     this.controls.enableDamping = true;
     this.controls.dampingFactor = 0.08;
     this.controls.target.set(0, -1, 0);
     this.controls.minDistance = 6;
     this.controls.maxDistance = 180;
+    // Ortho zoom limits matching the dolly limits above.
+    const tanHalf = Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2));
+    this.controls.minZoom = ORTHO_HALF_H / (180 * tanHalf);
+    this.controls.maxZoom = ORTHO_HALF_H / (6 * tanHalf);
+    this.controls.autoRotateSpeed = 0.7;
 
     this.scene.fog = new THREE.Fog(0x0a0f16, 95, 240);
 
@@ -249,19 +289,23 @@ export class GraphScene {
     dom.addEventListener("pointermove", this.onPointerMoveB);
     window.addEventListener("pointerup", this.onPointerUpB);
     dom.addEventListener("dblclick", this.onDblClickB);
+    dom.addEventListener("wheel", this.onWheelB, { passive: true });
 
     this.ro = new ResizeObserver(() => this.onResize());
     this.ro.observe(container);
+
+    // Label sprites are canvas-baked — repaint them when the theme class flips.
+    this.themeObserver = new MutationObserver(() => {
+      if (!this.alive) return;
+      this.relabelAll();
+    });
+    this.themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
 
     // Rebuild text sprites once webfonts are ready.
     if (document.fonts?.ready) {
       document.fonts.ready.then(() => {
         if (!this.alive) return;
-        this.labelEpoch++;
-        for (const rec of this.nodes.values()) rec.labelKey = "";
-        for (const rec of this.edges.values()) rec.labelKey = "";
-        this.refreshEdgeLabels();
-        this.refreshNodeLabels();
+        this.relabelAll();
       });
     }
 
@@ -290,6 +334,91 @@ export class GraphScene {
     this.refreshEdgeLabels();
   }
 
+  setParticles(enabled: boolean) {
+    this.particles.visible = enabled;
+  }
+
+  setReflections(enabled: boolean) {
+    this.reflections = enabled;
+    for (const rec of this.nodes.values()) {
+      const m = rec.mesh.material as THREE.MeshStandardMaterial;
+      m.roughness = enabled ? 0.34 : 0.95;
+      m.metalness = enabled ? 0.28 : 0;
+    }
+    for (const rec of this.edges.values()) {
+      const m = rec.arrow.material as THREE.MeshStandardMaterial;
+      m.roughness = enabled ? 0.4 : 0.95;
+      m.metalness = enabled ? 0.2 : 0;
+    }
+  }
+
+  /**
+   * 2D mode = "2D in 3D": the camera is locked dead-on to the XY sheet
+   * and renders through an orthographic projection (zero perspective
+   * distortion), orbiting is disabled and left-drag pans instead.
+   * All nodes are also flattened to the Z=0 plane (animated), so depth
+   * doesn't shrink/fatten them or make them crowd each other. The graph
+   * data keeps its original Z — going back to 3D restores full depth.
+   */
+  set2DMode(enabled: boolean) {
+    if (this.view2D === enabled) return;
+    this.zAnim = { from: this.view2D ? 1 : 0, to: enabled ? 1 : 0, t: 0 };
+    this.view2D = enabled;
+    this.controls.enableRotate = !enabled;
+    this.controls.mouseButtons.LEFT = enabled ? THREE.MOUSE.PAN : THREE.MOUSE.ROTATE;
+    if (enabled) {
+      const target = this.controls.target.clone();
+      const dist = Math.max(this.camera.position.distanceTo(target), 12);
+      // Keep the framing: match the perspective's visible half-height.
+      const hh = dist * Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2));
+      this.ortho.zoom = ORTHO_HALF_H / hh;
+      this.ortho.position.copy(target).add(new THREE.Vector3(0, 0, dist));
+      this.ortho.updateProjectionMatrix();
+      this.controls.object = this.ortho;
+    } else {
+      this.controls.object = this.camera;
+    }
+    this.controls.update();
+  }
+
+  /** Active camera: perspective in 3D, orthographic in 2D. */
+  private cam(): THREE.Camera {
+    return this.view2D ? this.ortho : this.camera;
+  }
+
+  setCameraSettings(s: CameraSettings) {
+    this.camera.fov = s.fov;
+    this.camera.updateProjectionMatrix();
+    this.controls.dampingFactor = s.damping;
+    this.controls.rotateSpeed = s.orbitSpeed;
+    this.autoRotateSetting = s.autoRotate;
+    if (!s.autoRotate) this.controls.autoRotate = false;
+  }
+
+  /** Tween the 3D camera to a preset angle, keeping target and distance. */
+  setViewPreset(preset: ViewPreset) {
+    if (this.view2D) return; // the front view already exists in 2D
+    const DIRS: Record<ViewPreset, THREE.Vector3> = {
+      top: new THREE.Vector3(0, 1, 0),
+      front: new THREE.Vector3(0, 0, 1),
+      side: new THREE.Vector3(1, 0, 0),
+      iso: new THREE.Vector3(1, 0.75, 1).normalize(),
+    };
+    const target = this.controls.target.clone();
+    const dist = THREE.MathUtils.clamp(
+      this.camera.position.distanceTo(target),
+      this.controls.minDistance,
+      this.controls.maxDistance,
+    );
+    this.focusTween = {
+      fromT: target.clone(),
+      toT: target,
+      fromC: this.camera.position.clone(),
+      toC: target.clone().add(DIRS[preset].clone().multiplyScalar(dist)),
+      t: 0,
+    };
+  }
+
   setConnectMode(active: boolean, sourceId: string | null) {
     this.connectMode = active;
     this.connectSource = sourceId;
@@ -303,12 +432,28 @@ export class GraphScene {
   }
 
   fitToView() {
-    const pts = this.graph.nodes.map((n) => n.position);
+    // Bounding box of the rendered positions (Z=0 while in 2D mode).
+    const pts = Array.from(this.nodes.values()).map((r) => r.group.position);
     if (pts.length === 0) return;
     const box = new THREE.Box3();
-    for (const p of pts) box.expandByPoint(new THREE.Vector3(p.x, p.y, p.z));
+    for (const p of pts) box.expandByPoint(p);
     const center = box.getCenter(new THREE.Vector3());
     const radius = Math.max(box.getBoundingSphere(new THREE.Sphere()).radius, 8);
+    if (this.view2D) {
+      // Same framing as the 3D fit, expressed as an ortho zoom.
+      const hh = (radius * 2.6 + 12) * Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2));
+      const dist = Math.max(this.ortho.position.distanceTo(this.controls.target), 12);
+      this.focusTween = {
+        fromT: this.controls.target.clone(),
+        toT: center,
+        fromC: this.ortho.position.clone(),
+        toC: center.clone().add(new THREE.Vector3(0, 0, dist)),
+        t: 0,
+        fromZoom: this.ortho.zoom,
+        toZoom: ORTHO_HALF_H / hh,
+      };
+      return;
+    }
     const dir = this.camera.position.clone().sub(this.controls.target).normalize();
     this.focusTween = {
       fromT: this.controls.target.clone(),
@@ -320,15 +465,16 @@ export class GraphScene {
   }
 
   focusNode(id: string) {
-    const n = this.graph.nodes.find((x) => x.id === id);
-    if (!n) return;
-    const to = new THREE.Vector3(n.position.x, n.position.y, n.position.z);
+    const rec = this.nodes.get(id);
+    if (!rec) return;
+    const to = rec.group.position.clone();
+    const cam = this.cam();
     const delta = to.clone().sub(this.controls.target);
     this.focusTween = {
       fromT: this.controls.target.clone(),
       toT: to,
-      fromC: this.camera.position.clone(),
-      toC: this.camera.position.clone().add(delta),
+      fromC: cam.position.clone(),
+      toC: cam.position.clone().add(delta),
       t: 0,
     };
   }
@@ -337,11 +483,13 @@ export class GraphScene {
     this.alive = false;
     cancelAnimationFrame(this.raf);
     this.ro.disconnect();
+    this.themeObserver.disconnect();
     const dom = this.renderer.domElement;
     dom.removeEventListener("pointerdown", this.onPointerDownB);
     dom.removeEventListener("pointermove", this.onPointerMoveB);
     window.removeEventListener("pointerup", this.onPointerUpB);
     dom.removeEventListener("dblclick", this.onDblClickB);
+    dom.removeEventListener("wheel", this.onWheelB);
     this.controls.dispose();
     this.scene.traverse((obj) => {
       const mesh = obj as THREE.Mesh;
@@ -378,7 +526,7 @@ export class GraphScene {
       } else {
         rec.data = n;
       }
-      rec.group.position.set(n.position.x, n.position.y, n.position.z);
+      rec.group.position.set(n.position.x, n.position.y, this.nodeZ(n.position.z));
 
       const sig = `${n.kind}:${(n.size ?? 1).toFixed(2)}`;
       if (rec.kindSig !== sig) {
@@ -411,8 +559,8 @@ export class GraphScene {
     const geo = makeKindGeometry(n.kind, n.size ?? 1);
     const mat = new THREE.MeshStandardMaterial({
       color: nodeColor(n),
-      roughness: 0.34,
-      metalness: 0.28,
+      roughness: this.reflections ? 0.34 : 0.95,
+      metalness: this.reflections ? 0.28 : 0,
       emissive: new THREE.Color(nodeColor(n)),
       emissiveIntensity: 0.18,
       transparent: true,
@@ -522,8 +670,8 @@ export class GraphScene {
       new THREE.ConeGeometry(0.34, 0.95, 14),
       new THREE.MeshStandardMaterial({
         color: edgeColor(e),
-        roughness: 0.4,
-        metalness: 0.2,
+        roughness: this.reflections ? 0.4 : 0.95,
+        metalness: this.reflections ? 0.2 : 0,
         emissive: new THREE.Color(edgeColor(e)),
         emissiveIntensity: 0.35,
         transparent: true,
@@ -552,13 +700,23 @@ export class GraphScene {
     };
   }
 
-  private nodeById(id: string): GraphNode | undefined {
-    return this.graph.nodes.find((n) => n.id === id);
+  /** Current flatten amount: 0 (3D) → 1 (everything at Z=0), eased while animating. */
+  private flattenFactor(): number {
+    if (!this.zAnim) return this.view2D ? 1 : 0;
+    const k = Math.min(this.zAnim.t, 1);
+    const ease = 1 - (1 - k) ** 3;
+    return this.zAnim.from + (this.zAnim.to - this.zAnim.from) * ease;
+  }
+
+  /** Rendered Z for a node's data Z: collapses toward 0 while in 2D mode. */
+  private nodeZ(dataZ: number): number {
+    return dataZ * (1 - this.flattenFactor());
   }
 
   private updateEdgeGeometry(rec: EdgeRec) {
-    const s = this.nodeById(rec.data.source);
-    const t = this.nodeById(rec.data.target);
+    // Use the *rendered* group positions so edges follow the 2D flattening.
+    const s = this.nodes.get(rec.data.source);
+    const t = this.nodes.get(rec.data.target);
     if (!s || !t) {
       rec.line.visible = false;
       rec.overlay.visible = false;
@@ -569,14 +727,14 @@ export class GraphScene {
     rec.line.visible = true;
     rec.label.visible = rec.labelVisible;
 
-    const sp = new THREE.Vector3(s.position.x, s.position.y, s.position.z);
-    const tp = new THREE.Vector3(t.position.x, t.position.y, t.position.z);
+    const sp = s.group.position.clone();
+    const tp = t.group.position.clone();
     const dir = tp.clone().sub(sp);
     const len = dir.length();
     const d = len > 0.0001 ? dir.clone().normalize() : new THREE.Vector3(0, 1, 0);
 
-    const rs = nodeRadius(s) * 1.15;
-    const rt = nodeRadius(t) * 1.15;
+    const rs = nodeRadius(s.data) * 1.15;
+    const rt = nodeRadius(t.data) * 1.15;
     const usable = Math.max(len - rs - rt, 0.2);
     const start = sp.clone().add(d.clone().multiplyScalar(Math.min(rs, len / 2 - 0.1)));
     const end = start.clone().add(d.clone().multiplyScalar(usable));
@@ -603,6 +761,22 @@ export class GraphScene {
   /* ================================================================ */
   /* Labels (canvas sprites)                                           */
   /* ================================================================ */
+
+  /** Force a full repaint of every label sprite (fonts, theme). */
+  private relabelAll() {
+    this.labelEpoch++;
+    for (const rec of this.nodes.values()) rec.labelKey = "";
+    for (const rec of this.edges.values()) rec.labelKey = "";
+    this.refreshEdgeLabels();
+    this.refreshNodeLabels();
+  }
+
+  /** Text colors for baked label sprites, per theme. */
+  private labelColors() {
+    return document.documentElement.classList.contains("dark")
+      ? { text: "#eaf2fb", sub: "#8fa5bd", accent: "#ffce6b", cyan: "#7fd4da" }
+      : { text: "#16202c", sub: "#5b6c80", accent: "#9a5304", cyan: "#0e7490" };
+  }
 
   private makeSprite(): THREE.Sprite {
     const mat = new THREE.SpriteMaterial({ transparent: true, depthTest: false, depthWrite: false });
@@ -631,11 +805,12 @@ export class GraphScene {
     canvas.width = Math.ceil(w);
     canvas.height = Math.ceil(h);
 
+    const dark = document.documentElement.classList.contains("dark");
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     roundedRect(ctx, 1, 1, canvas.width - 2, canvas.height - 2, 10);
-    ctx.fillStyle = "rgba(9, 14, 21, 0.82)";
+    ctx.fillStyle = dark ? "rgba(9, 14, 21, 0.82)" : "rgba(255, 255, 255, 0.94)";
     ctx.fill();
-    ctx.strokeStyle = "rgba(126, 152, 182, 0.28)";
+    ctx.strokeStyle = dark ? "rgba(126, 152, 182, 0.28)" : "rgba(91, 108, 128, 0.4)";
     ctx.lineWidth = 1.5;
     ctx.stroke();
 
@@ -662,14 +837,15 @@ export class GraphScene {
       const key = `n${this.labelEpoch}|${n.label}|${n.kind}`;
       if (rec.labelKey === key) continue;
       rec.labelKey = key;
+      const lc = this.labelColors();
       this.paintSprite(
         rec.label,
         [
-          { text: n.label, font: '600 30px "Chakra Petch", sans-serif', color: "#eaf2fb" },
+          { text: n.label, font: '600 30px "Chakra Petch", sans-serif', color: lc.text },
           {
             text: KIND_META[n.kind]?.label.toUpperCase() ?? n.kind.toUpperCase(),
             font: '500 19px "IBM Plex Mono", monospace',
-            color: KIND_META[n.kind]?.color ?? "#8fa5bd",
+            color: KIND_META[n.kind]?.color ?? lc.sub,
           },
         ],
         0.0165,
@@ -680,8 +856,8 @@ export class GraphScene {
   private refreshEdgeLabels() {
     for (const rec of this.edges.values()) {
       const e = rec.data;
-      const s = this.nodeById(e.source);
-      const t = this.nodeById(e.target);
+      const s = this.nodes.get(e.source);
+      const t = this.nodes.get(e.target);
       if (!s || !t) {
         rec.label.visible = false;
         continue;
@@ -690,25 +866,29 @@ export class GraphScene {
         (this.selection?.type === "edge" && this.selection.id === e.id) ||
         (this.hover?.type === "edge" && this.hover.id === e.id);
       const ls = this.labelSettings;
+      const lc = this.labelColors();
       const arrow = e.directed ? "→" : "↔";
+      // Rendered distance — flat (X/Y) in 2D mode, full 3D otherwise.
+      const sp = s.group.position;
+      const tp = t.group.position;
       const dist = Math.sqrt(
-        (t.position.x - s.position.x) ** 2 +
-          (t.position.y - s.position.y) ** 2 +
-          (t.position.z - s.position.z) ** 2,
+        (tp.x - sp.x) ** 2 +
+          (tp.y - sp.y) ** 2 +
+          (tp.z - sp.z) ** 2,
       );
 
       const lines: LabelLine[] = [];
       if (isFocus || ls.name) {
         lines.push({
-          text: e.label ? e.label : `${s.label} ${arrow} ${t.label}`,
+          text: e.label ? e.label : `${s.data.label} ${arrow} ${t.data.label}`,
           font: '600 25px "Chakra Petch", sans-serif',
-          color: "#e2ebf6",
+          color: lc.text,
         });
         if (isFocus && e.label) {
           lines.push({
-            text: `${s.label} ${arrow} ${t.label}`,
+            text: `${s.data.label} ${arrow} ${t.data.label}`,
             font: '500 19px "IBM Plex Mono", monospace',
-            color: "#8fa5bd",
+            color: lc.sub,
           });
         }
       }
@@ -716,14 +896,14 @@ export class GraphScene {
         lines.push({
           text: `weight: ${e.weight}`,
           font: '500 21px "IBM Plex Mono", monospace',
-          color: "#ffce6b",
+          color: lc.accent,
         });
       }
       if (isFocus || ls.distance) {
         lines.push({
           text: `distance: ${dist.toFixed(2)}`,
           font: '500 21px "IBM Plex Mono", monospace',
-          color: "#7fd4da",
+          color: lc.cyan,
         });
       }
 
@@ -818,7 +998,7 @@ export class GraphScene {
   }
 
   private pickNode(): NodeRec | null {
-    this.raycaster.setFromCamera(this.pointerNdc, this.camera);
+    this.raycaster.setFromCamera(this.pointerNdc, this.cam());
     const meshes = Array.from(this.nodes.values()).map((r) => r.mesh);
     const hits = this.raycaster.intersectObjects(meshes, false);
     if (hits.length === 0) return null;
@@ -827,7 +1007,7 @@ export class GraphScene {
   }
 
   private pickEdge(): EdgeRec | null {
-    this.raycaster.setFromCamera(this.pointerNdc, this.camera);
+    this.raycaster.setFromCamera(this.pointerNdc, this.cam());
     const lines = Array.from(this.edges.values())
       .filter((r) => r.line.visible)
       .map((r) => r.line);
@@ -838,12 +1018,13 @@ export class GraphScene {
   }
 
   private onPointerDown(e: PointerEvent) {
+    this.interactionCool = 2;
     if (e.button !== 0) return;
     this.downPos = { x: e.clientX, y: e.clientY };
     this.setPointerFromEvent(e);
     const node = this.pickNode();
     if (node && !this.connectMode) {
-      const camDir = this.camera.getWorldDirection(new THREE.Vector3());
+      const camDir = this.cam().getWorldDirection(new THREE.Vector3());
       const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(camDir, node.group.position);
       const hit = this.raycaster.ray.intersectPlane(plane, new THREE.Vector3());
       if (hit) {
@@ -851,6 +1032,7 @@ export class GraphScene {
           id: node.id,
           plane,
           offset: node.group.position.clone().sub(hit),
+          dataZ: node.data.position.z,
         };
         this.controls.enabled = false;
         this.renderer.domElement.style.cursor = "grabbing";
@@ -862,17 +1044,21 @@ export class GraphScene {
     this.setPointerFromEvent(e);
 
     if (this.dragging) {
-      this.raycaster.setFromCamera(this.pointerNdc, this.camera);
+      this.raycaster.setFromCamera(this.pointerNdc, this.cam());
       const hit = this.raycaster.ray.intersectPlane(this.dragging.plane, new THREE.Vector3());
       if (hit) {
         const p = hit.add(this.dragging.offset);
+        const rec = this.nodes.get(this.dragging.id);
+        if (rec) {
+          // In 2D the drag plane is Z=0, but the node keeps its original
+          // depth in the data so 3D restores it unchanged.
+          rec.group.position.set(p.x, p.y, this.view2D ? this.nodeZ(this.dragging.dataZ) : p.z);
+        }
         const pos = {
           x: Math.round(p.x * 100) / 100,
           y: Math.round(p.y * 100) / 100,
-          z: Math.round(p.z * 100) / 100,
+          z: this.view2D ? this.dragging.dataZ : Math.round(p.z * 100) / 100,
         };
-        const rec = this.nodes.get(this.dragging.id);
-        if (rec) rec.group.position.set(pos.x, pos.y, pos.z);
         // Live-update dependent edge geometry + distance labels.
         for (const erec of this.edges.values()) {
           if (erec.data.source === this.dragging.id || erec.data.target === this.dragging.id) {
@@ -983,8 +1169,8 @@ export class GraphScene {
   private onDblClick(e: MouseEvent) {
     this.setPointerFromEvent(e);
     if (this.pickNode() || this.pickEdge()) return;
-    this.raycaster.setFromCamera(this.pointerNdc, this.camera);
-    const camDir = this.camera.getWorldDirection(new THREE.Vector3());
+    this.raycaster.setFromCamera(this.pointerNdc, this.cam());
+    const camDir = this.cam().getWorldDirection(new THREE.Vector3());
     const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(camDir, new THREE.Vector3(0, 0, 0));
     const hit = this.raycaster.ray.intersectPlane(plane, new THREE.Vector3());
     if (!hit) return;
@@ -1002,6 +1188,10 @@ export class GraphScene {
     if (w === 0 || h === 0) return;
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
+    const a = w / h;
+    this.ortho.left = -ORTHO_HALF_H * a;
+    this.ortho.right = ORTHO_HALF_H * a;
+    this.ortho.updateProjectionMatrix();
     this.renderer.setSize(w, h);
     for (const rec of this.edges.values()) {
       rec.mat.resolution.set(w, h);
@@ -1019,7 +1209,29 @@ export class GraphScene {
     const dt = Math.min(this.clock.getDelta(), 0.1);
     const t = this.clock.elapsedTime;
 
+    // Auto-rotate: spins while idle, pauses on interaction, resumes after a cooldown.
+    if (this.autoRotateSetting) {
+      this.interactionCool -= dt;
+      this.controls.autoRotate =
+        !this.view2D &&
+        this.downPos === null &&
+        this.dragging === null &&
+        this.focusTween === null &&
+        this.interactionCool <= 0;
+    }
+
     this.controls.update();
+
+    // 2D flatten / unflatten: nodes ease toward Z=0 (and back), edges follow.
+    if (this.zAnim) {
+      this.zAnim.t += dt / 0.45;
+      for (const rec of this.nodes.values()) {
+        rec.group.position.z = this.nodeZ(rec.data.position.z);
+      }
+      for (const rec of this.edges.values()) this.updateEdgeGeometry(rec);
+      this.refreshEdgeLabels();
+      if (this.zAnim.t >= 1) this.zAnim = null;
+    }
 
     // ambient motion
     this.particles.rotation.y += dt * 0.012;
@@ -1035,7 +1247,7 @@ export class GraphScene {
       else if (rec.state === "idle") s *= 1 + 0.015 * Math.sin(t * 1.6 + rec.phase);
       rec.group.scale.setScalar(s);
       if (rec.ring.visible) {
-        rec.ring.lookAt(this.camera.position);
+        rec.ring.lookAt(this.cam().position);
         rec.ring.rotateZ(t * 0.8);
       }
     }
@@ -1051,10 +1263,18 @@ export class GraphScene {
       const k = Math.min(this.focusTween.t, 1);
       const ease = 1 - (1 - k) ** 3;
       this.controls.target.lerpVectors(this.focusTween.fromT, this.focusTween.toT, ease);
-      this.camera.position.lerpVectors(this.focusTween.fromC, this.focusTween.toC, ease);
+      if (this.view2D) {
+        if (this.focusTween.fromZoom !== undefined && this.focusTween.toZoom !== undefined) {
+          this.ortho.zoom = this.focusTween.fromZoom + (this.focusTween.toZoom - this.focusTween.fromZoom) * ease;
+          this.ortho.updateProjectionMatrix();
+        }
+        this.ortho.position.lerpVectors(this.focusTween.fromC, this.focusTween.toC, ease);
+      } else {
+        this.camera.position.lerpVectors(this.focusTween.fromC, this.focusTween.toC, ease);
+      }
       if (k >= 1) this.focusTween = null;
     }
 
-    this.renderer.render(this.scene, this.camera);
+    this.renderer.render(this.scene, this.cam());
   };
 }

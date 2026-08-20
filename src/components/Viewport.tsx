@@ -1,12 +1,16 @@
 import { useEffect, useRef } from "react";
 import { GraphScene } from "../engine/GraphScene";
-import type { Graph, LabelSettings, Selection, Vec3 } from "../types";
+import type { CameraSettings, Graph, LabelSettings, Selection, Vec3 } from "../types";
 import type { EdgeAlgoState, NodeAlgoState } from "../algorithms/types";
 
 interface ViewportProps {
   graph: Graph;
   selection: Selection;
   labelSettings: LabelSettings;
+  particles: boolean;
+  reflections: boolean;
+  view2D: boolean;
+  cameraSettings: CameraSettings;
   connectActive: boolean;
   connectSource: string | null;
   nodeStates: Map<string, NodeAlgoState>;
@@ -31,6 +35,10 @@ export function Viewport(props: ViewportProps) {
     graph,
     selection,
     labelSettings,
+    particles,
+    reflections,
+    view2D,
+    cameraSettings,
     connectActive,
     connectSource,
     nodeStates,
@@ -55,6 +63,10 @@ export function Viewport(props: ViewportProps) {
     scene.setGraph(live.current.graph);
     scene.setSelection(live.current.selection);
     scene.setLabelSettings(live.current.labelSettings);
+    scene.setParticles(live.current.particles);
+    scene.setReflections(live.current.reflections);
+    scene.set2DMode(live.current.view2D);
+    scene.setCameraSettings(live.current.cameraSettings);
     scene.setConnectMode(live.current.connectActive, live.current.connectSource);
     scene.setAlgoStates(live.current.nodeStates, live.current.edgeStates);
     scene.fitToView();
@@ -74,6 +86,18 @@ export function Viewport(props: ViewportProps) {
   useEffect(() => {
     sceneRef.current?.setLabelSettings(labelSettings);
   }, [sceneRef, labelSettings]);
+  useEffect(() => {
+    sceneRef.current?.setParticles(particles);
+  }, [sceneRef, particles]);
+  useEffect(() => {
+    sceneRef.current?.setReflections(reflections);
+  }, [sceneRef, reflections]);
+  useEffect(() => {
+    sceneRef.current?.set2DMode(view2D);
+  }, [sceneRef, view2D]);
+  useEffect(() => {
+    sceneRef.current?.setCameraSettings(cameraSettings);
+  }, [sceneRef, cameraSettings]);
   useEffect(() => {
     sceneRef.current?.setConnectMode(connectActive, connectSource);
   }, [sceneRef, connectActive, connectSource]);

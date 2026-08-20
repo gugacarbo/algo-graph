@@ -1,12 +1,16 @@
 import { useRef, useState } from "react";
 import type { LabelSettings } from "../types";
+import { useTheme } from "../hooks/useTheme";
 import {
   IconDownload,
   IconFrame,
+  IconGear,
   IconLink,
   IconLock,
   IconLogo,
+  IconMoon,
   IconPlus,
+  IconSun,
   IconTag,
   IconUpload,
   IconWand,
@@ -15,6 +19,8 @@ import {
 interface TopBarProps {
   locked: boolean;
   connectActive: boolean;
+  view2D: boolean;
+  onView2D: (v: boolean) => void;
   labelSettings: LabelSettings;
   onAddNode: () => void;
   onToggleConnect: () => void;
@@ -24,11 +30,13 @@ interface TopBarProps {
   onImport: (file: File) => void;
   onLabelSettings: (s: LabelSettings) => void;
   onLoadSample: () => void;
+  onOpenSettings: () => void;
 }
 
 export function TopBar(p: TopBarProps) {
   const [labelsOpen, setLabelsOpen] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const { theme, toggleTheme } = useTheme();
 
   const LabelToggle = ({ k, label }: { k: keyof LabelSettings; label: string }) => (
     <label className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 row-hover">
@@ -45,7 +53,7 @@ export function TopBar(p: TopBarProps) {
   return (
     <header
       className="relative z-20 flex h-12 flex-none items-center gap-2 border-b px-3"
-      style={{ borderColor: "var(--line)", background: "linear-gradient(180deg,#111a26,#0d141d)" }}
+      style={{ borderColor: "var(--line)", background: "var(--header-bg)" }}
     >
       {/* brand */}
       <div className="mr-2 flex items-center gap-2.5">
@@ -83,6 +91,34 @@ export function TopBar(p: TopBarProps) {
         <IconFrame />
       </button>
 
+      {/* 2D / 3D camera switch */}
+      <div
+        className="relative flex h-[26px] w-[84px] flex-none items-center rounded-md border border-border bg-muted/50 p-0.5"
+        title="2D: front view, drag pans · 3D: orbit"
+      >
+        <span
+          aria-hidden
+          className={`absolute bottom-0.5 top-0.5 left-0.5 w-[calc(50%-2px)] rounded-[5px] bg-primary/15 ring-1 ring-inset ring-primary/55 transition-transform duration-180 ${
+            p.view2D ? "translate-x-0" : "translate-x-full"
+          }`}
+        />
+        {(["2D", "3D"] as const).map((mode) => {
+          const active = (mode === "2D") === p.view2D;
+          return (
+            <button
+              key={mode}
+              type="button"
+              className={`font-mono2 relative z-[1] w-1/2 text-center text-[10.5px] font-semibold tracking-[0.08em] transition-colors ${
+                active ? "text-primary" : "text-muted-foreground"
+              }`}
+              onClick={() => p.onView2D(mode === "2D")}
+            >
+              {mode}
+            </button>
+          );
+        })}
+      </div>
+
       <div className="relative">
         <button type="button" className={`btn ${labelsOpen ? "btn-on" : ""}`} onClick={() => setLabelsOpen((v) => !v)} title="Edge label visibility">
           <IconTag /> Labels
@@ -116,7 +152,7 @@ export function TopBar(p: TopBarProps) {
       <div className="flex-1" />
 
       {p.locked && (
-        <span className="chip" style={{ borderColor: "rgba(255,178,36,0.4)", color: "var(--amber)" }}>
+        <span className="chip" style={{ borderColor: "rgba(var(--amber-rgb),0.4)", color: "var(--amber)" }}>
           <IconLock size={11} /> editing locked during search
         </span>
       )}
@@ -146,6 +182,17 @@ export function TopBar(p: TopBarProps) {
       </button>
       <button type="button" className="btn" onClick={p.onLoadSample} disabled={p.locked} title="Restore the sample architecture">
         Sample
+      </button>
+      <button
+        type="button"
+        className="btn icon-btn"
+        onClick={toggleTheme}
+        title={theme === "dark" ? "Switch to light theme" : "Switch to dark theme"}
+      >
+        {theme === "dark" ? <IconSun /> : <IconMoon />}
+      </button>
+      <button type="button" className="btn icon-btn" onClick={p.onOpenSettings} title="Settings">
+        <IconGear />
       </button>
     </header>
   );

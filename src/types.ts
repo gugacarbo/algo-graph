@@ -58,6 +58,26 @@ export interface LabelSettings {
   distance: boolean;
 }
 
+export interface CameraSettings {
+  /** Perspective field of view in degrees (3D mode only). */
+  fov: number;
+  /** OrbitControls damping factor — lower = floatier. */
+  damping: number;
+  /** Orbit rotation speed multiplier. */
+  orbitSpeed: number;
+  /** Slowly turn the camera when idle. */
+  autoRotate: boolean;
+}
+
+export const DEFAULT_CAMERA_SETTINGS: CameraSettings = {
+  fov: 50,
+  damping: 0.08,
+  orbitSpeed: 1,
+  autoRotate: false,
+};
+
+export type ViewPreset = "top" | "front" | "side" | "iso";
+
 /* ------------------------------------------------------------------ */
 /* Visual vocabulary                                                   */
 /* ------------------------------------------------------------------ */

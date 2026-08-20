@@ -167,8 +167,11 @@ export class GraphScene {
   private reflections = true;
   private view2D = false;
   private autoRotateSetting = false;
-  /** Seconds until auto-rotate may resume after the user last interacted. */
+  /** Configured seconds of idle time before auto-rotation starts. */
+  private autoRotateDelay = 2;
+  /** Counts down to when auto-rotate may start after the last interaction. */
   private interactionCool = 0;
+  private fov2D = 50;
   private clock = new THREE.Clock();
   private raf = 0;
   private alive = true;
@@ -178,7 +181,7 @@ export class GraphScene {
   private onPointerMoveB = (e: PointerEvent) => this.onPointerMove(e);
   private onPointerUpB = (e: PointerEvent) => this.onPointerUp(e);
   private onDblClickB = (e: MouseEvent) => this.onDblClick(e);
-  private onWheelB = () => (this.interactionCool = 2);
+  private onWheelB = () => (this.interactionCool = this.autoRotateDelay);
 
   constructor(container: HTMLElement, cb: GraphSceneCallbacks) {
     this.container = container;
@@ -219,7 +222,7 @@ export class GraphScene {
     const tanHalf = Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2));
     this.controls.minZoom = ORTHO_HALF_H / (180 * tanHalf);
     this.controls.maxZoom = ORTHO_HALF_H / (6 * tanHalf);
-    this.controls.autoRotateSpeed = 0.7;
+    this.controls.autoRotateSpeed = 0.23;
 
     this.scene.fog = new THREE.Fog(0x0a0f16, 95, 240);
 
@@ -369,11 +372,9 @@ export class GraphScene {
     if (enabled) {
       const target = this.controls.target.clone();
       const dist = Math.max(this.camera.position.distanceTo(target), 12);
-      // Keep the framing: match the perspective's visible half-height.
-      const hh = dist * Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2));
-      this.ortho.zoom = ORTHO_HALF_H / hh;
       this.ortho.position.copy(target).add(new THREE.Vector3(0, 0, dist));
-      this.ortho.updateProjectionMatrix();
+      // Framing comes from the 2D field of view (independent of the 3D FOV).
+      this.applyFov2D(this.fov2D);
       this.controls.object = this.ortho;
     } else {
       this.controls.object = this.camera;
@@ -389,10 +390,21 @@ export class GraphScene {
   setCameraSettings(s: CameraSettings) {
     this.camera.fov = s.fov;
     this.camera.updateProjectionMatrix();
+    this.fov2D = s.fov2D;
+    this.autoRotateDelay = s.autoRotateDelay;
     this.controls.dampingFactor = s.damping;
     this.controls.rotateSpeed = s.orbitSpeed;
+    if (s.autoRotate && !this.autoRotateSetting) this.interactionCool = s.autoRotateDelay;
     this.autoRotateSetting = s.autoRotate;
     if (!s.autoRotate) this.controls.autoRotate = false;
+    if (this.view2D) this.applyFov2D(s.fov2D);
+  }
+
+  /** Size the orthographic frustum from the 2D field of view (same math as 3D: dist × tan(fov/2)). */
+  private applyFov2D(fov: number) {
+    const dist = Math.max(this.ortho.position.distanceTo(this.controls.target), 12);
+    this.ortho.zoom = ORTHO_HALF_H / (dist * Math.tan(THREE.MathUtils.degToRad(fov / 2)));
+    this.ortho.updateProjectionMatrix();
   }
 
   /** Tween the 3D camera to a preset angle, keeping target and distance. */
@@ -1018,7 +1030,7 @@ export class GraphScene {
   }
 
   private onPointerDown(e: PointerEvent) {
-    this.interactionCool = 2;
+    this.interactionCool = this.autoRotateDelay;
     if (e.button !== 0) return;
     this.downPos = { x: e.clientX, y: e.clientY };
     this.setPointerFromEvent(e);

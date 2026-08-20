@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { ComponentType } from "react";
-import type { CameraSettings, LabelSettings, ViewPreset } from "../types";
+import type { CameraSettings, LabelSettings } from "../types";
 import {
   IconCamera,
   IconDownload,
@@ -24,13 +24,6 @@ const SECTIONS: { id: Section; label: string; icon: ComponentType<{ size?: numbe
   { id: "about", label: "About", icon: IconGear },
 ];
 
-const VIEW_PRESETS: { id: ViewPreset; label: string }[] = [
-  { id: "top", label: "Top" },
-  { id: "front", label: "Front" },
-  { id: "side", label: "Side" },
-  { id: "iso", label: "Iso" },
-];
-
 interface SettingsDialogProps {
   onClose: () => void;
   labelSettings: LabelSettings;
@@ -41,7 +34,6 @@ interface SettingsDialogProps {
   onReflections: (v: boolean) => void;
   cameraSettings: CameraSettings;
   onCameraSettings: (s: CameraSettings) => void;
-  onViewPreset: (p: ViewPreset) => void;
   onExport: () => void;
   onImport: (file: File) => void;
   onLoadSample: () => void;
@@ -186,8 +178,8 @@ export function SettingsDialog(p: SettingsDialogProps) {
               <div>
                 <h2 className="font-display text-[14px] font-semibold">Camera</h2>
                 <p className="mt-1 mb-4 text-[12px]" style={{ color: "var(--text-muted)" }}>
-                  Feel and framing of the viewport. Field of view and view presets only apply in
-                  3D mode.
+                  Feel and framing of the viewport. The 3D field of view applies to orbit mode and
+                  the 2D one to the flat front view.
                 </p>
                 <div className="flex max-w-md flex-col gap-2">
                   <div
@@ -202,14 +194,37 @@ export function SettingsDialog(p: SettingsDialogProps) {
                     </span>
                     <span className="flex w-44 flex-none items-center gap-2">
                       <Range
-                        min={25}
-                        max={90}
+                        min={5}
+                        max={60}
                         step={1}
                         value={p.cameraSettings.fov}
                         onChange={(v) => p.onCameraSettings({ ...p.cameraSettings, fov: v })}
                       />
                       <span className="font-mono2 w-9 text-right text-[11px]" style={{ color: "var(--text-muted)" }}>
                         {p.cameraSettings.fov}°
+                      </span>
+                    </span>
+                  </div>
+                  <div
+                    className="flex items-center justify-between gap-4 rounded-md border px-3 py-2.5"
+                    style={{ borderColor: "var(--line)" }}
+                  >
+                    <span>
+                      <span className="block text-[13px]">2D field of view</span>
+                      <span className="mt-0.5 block text-[11px]" style={{ color: "var(--faint)" }}>
+                        How much of the graph the flat 2D view shows
+                      </span>
+                    </span>
+                    <span className="flex w-44 flex-none items-center gap-2">
+                      <Range
+                        min={5}
+                        max={60}
+                        step={1}
+                        value={p.cameraSettings.fov2D}
+                        onChange={(v) => p.onCameraSettings({ ...p.cameraSettings, fov2D: v })}
+                      />
+                      <span className="font-mono2 w-9 text-right text-[11px]" style={{ color: "var(--text-muted)" }}>
+                        {p.cameraSettings.fov2D}°
                       </span>
                     </span>
                   </div>
@@ -274,18 +289,29 @@ export function SettingsDialog(p: SettingsDialogProps) {
                       onChange={(v) => p.onCameraSettings({ ...p.cameraSettings, autoRotate: v })}
                     />
                   </div>
-                  <div className="rounded-md border px-3 py-2.5" style={{ borderColor: "var(--line)" }}>
-                    <span className="block text-[13px]">View presets</span>
-                    <span className="mt-0.5 block text-[11px]" style={{ color: "var(--faint)" }}>
-                      Tween the camera to a fixed angle (3D mode)
+                  <div
+                    className="flex items-center justify-between gap-4 rounded-md border px-3 py-2.5"
+                    style={{ borderColor: "var(--line)" }}
+                  >
+                    <span>
+                      <span className="block text-[13px]">Auto-rotate delay</span>
+                      <span className="mt-0.5 block text-[11px]" style={{ color: "var(--faint)" }}>
+                        Idle time before the turntable starts
+                      </span>
                     </span>
-                    <div className="mt-2 flex gap-1.5">
-                      {VIEW_PRESETS.map((v) => (
-                        <button key={v.id} type="button" className="btn" onClick={() => p.onViewPreset(v.id)}>
-                          {v.label}
-                        </button>
-                      ))}
-                    </div>
+                    <span className="flex w-44 flex-none items-center gap-2">
+                      <Range
+                        min={0}
+                        max={30}
+                        step={1}
+                        value={p.cameraSettings.autoRotateDelay}
+                        onChange={(v) => p.onCameraSettings({ ...p.cameraSettings, autoRotateDelay: v })}
+                        disabled={!p.cameraSettings.autoRotate}
+                      />
+                      <span className="font-mono2 w-9 text-right text-[11px]" style={{ color: "var(--text-muted)" }}>
+                        {p.cameraSettings.autoRotateDelay}s
+                      </span>
+                    </span>
                   </div>
                 </div>
               </div>

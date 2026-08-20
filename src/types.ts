@@ -59,24 +59,37 @@ export interface LabelSettings {
 }
 
 export interface CameraSettings {
-  /** Perspective field of view in degrees (3D mode only). */
+  /** Perspective field of view in degrees (3D mode). */
   fov: number;
+  /** 2D mode field of view in degrees — sizes the orthographic frustum. */
+  fov2D: number;
   /** OrbitControls damping factor — lower = floatier. */
   damping: number;
   /** Orbit rotation speed multiplier. */
   orbitSpeed: number;
   /** Slowly turn the camera when idle. */
   autoRotate: boolean;
+  /** Seconds of idle time before auto-rotation starts. */
+  autoRotateDelay: number;
 }
 
 export const DEFAULT_CAMERA_SETTINGS: CameraSettings = {
   fov: 50,
+  fov2D: 50,
   damping: 0.08,
   orbitSpeed: 1,
   autoRotate: false,
+  autoRotateDelay: 2,
 };
 
 export type ViewPreset = "top" | "front" | "side" | "iso";
+
+export const VIEW_PRESETS: { id: ViewPreset; label: string }[] = [
+  { id: "top", label: "Top" },
+  { id: "front", label: "Front" },
+  { id: "side", label: "Side" },
+  { id: "iso", label: "Iso" },
+];
 
 /* ------------------------------------------------------------------ */
 /* Visual vocabulary                                                   */

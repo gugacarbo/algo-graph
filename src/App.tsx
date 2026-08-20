@@ -10,7 +10,7 @@ import { useAlgorithmRunner } from "./hooks/useAlgorithmRunner";
 import { computeForceLayout } from "./layout";
 import type { GraphScene } from "./engine/GraphScene";
 import type { Graph, GraphEdge, GraphNode, Selection, Vec3 } from "./types";
-import { STATE_COLORS } from "./types";
+import { STATE_COLORS, VIEW_PRESETS } from "./types";
 import type { EdgeAlgoState, NodeAlgoState } from "./algorithms/types";
 import { edgeDistance, euclideanDistance } from "./algorithms/graphUtils";
 import { IconLink, IconLock, IconX } from "./components/icons";
@@ -533,6 +533,24 @@ export default function App() {
           {statusHint}
         </span>
         <span className="flex-1" />
+
+        {/* view presets (3D mode) */}
+        <div className="flex items-center gap-1">
+          {VIEW_PRESETS.map((v) => (
+            <button
+              key={v.id}
+              type="button"
+              className="btn h-5 px-1.5 text-[10px]"
+              disabled={view2D}
+              title={view2D ? "View presets are only available in 3D mode" : `Camera preset: ${v.label.toLowerCase()}`}
+              onClick={() => sceneRef.current?.setViewPreset(v.id)}
+            >
+              {v.label}
+            </button>
+          ))}
+        </div>
+        <span className="h-3.5 w-px" style={{ background: "var(--line)" }} />
+
         {selectedEdge && (
           <span className="chip" style={{ color: "var(--cyan)", borderColor: "rgba(var(--cyan-rgb),0.35)" }}>
             w:{selectedEdge.weight} · d:{selectedDist === null ? "—" : selectedDist.toFixed(2)}
@@ -557,7 +575,6 @@ export default function App() {
           onReflections={editor.setReflections}
           cameraSettings={editor.cameraSettings}
           onCameraSettings={editor.setCameraSettings}
-          onViewPreset={(preset) => sceneRef.current?.setViewPreset(preset)}
           onExport={handleExport}
           onImport={handleImport}
           onLoadSample={handleLoadSample}

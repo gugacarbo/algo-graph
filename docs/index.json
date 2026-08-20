@@ -1,0 +1,62 @@
+[
+  {
+    "id": "ADR-0001",
+    "path": "docs/adr/0001-cena-three-js-imperativa-como-espelho-do-react.md",
+    "layer": "adr",
+    "title": "Cena three.js imperativa como espelho do React",
+    "status": "accepted",
+    "builds-on": [
+      "ADR-0005"
+    ],
+    "superseded-by": null,
+    "implemented-by": []
+  },
+  {
+    "id": "ADR-0002",
+    "path": "docs/adr/0002-algoritmos-como-geradores-puros-de-passos-com-replay-integral.md",
+    "layer": "adr",
+    "title": "Algoritmos como geradores puros de passos com replay integral",
+    "status": "accepted",
+    "builds-on": [
+      "ADR-0001",
+      "ADR-0003"
+    ],
+    "superseded-by": null,
+    "implemented-by": []
+  },
+  {
+    "id": "ADR-0003",
+    "path": "docs/adr/0003-weight-obrigatorio-e-independente-da-distancia-3d.md",
+    "layer": "adr",
+    "title": "Weight obrigatório e independente da distância 3D",
+    "status": "accepted",
+    "builds-on": [],
+    "superseded-by": null,
+    "implemented-by": []
+  },
+  {
+    "id": "ADR-0004",
+    "path": "docs/adr/0004-heuristica-a-nao-admissivel-como-escolha-pedagogica.md",
+    "layer": "adr",
+    "title": "Heurística A* não-admissível como escolha pedagógica",
+    "status": "accepted",
+    "builds-on": [
+      "ADR-0002",
+      "ADR-0003"
+    ],
+    "superseded-by": null,
+    "implemented-by": []
+  },
+  {
+    "id": "ADR-0005",
+    "path": "docs/adr/0005-force-layout-3d-deterministico-sob-demanda-agnostico-de-peso.md",
+    "layer": "adr",
+    "title": "Force layout 3D determinístico sob demanda, agnóstico de peso",
+    "status": "accepted",
+    "builds-on": [
+      "ADR-0003"
+    ],
+    "superseded-by": null,
+    "implemented-by": []
+  }
+]

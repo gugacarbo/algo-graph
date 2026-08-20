@@ -14,36 +14,49 @@ casa-standard-ref: 7cdb964                 # versão do casa-standard de origem 
 > Regras de um pacote específico → <subdir>/AGENTS.md (lazy nativo, nearest-wins).
 
 ## Contexto em 5 linhas
-<!-- O que este sistema é, pra quem, e qual o stack principal. Máximo 5 linhas. -->
+ArchiGraph: editor 3D de grafos de arquitetura (cena WebGL three.js) para desenhar grafos com `weight` ≠ distância 3D e animar passo a passo buscas (BFS, DFS, Dijkstra, A*).
+Uso local/educacional: build single-file `dist/index.html` — sem backend, sem CI, sem remote.
+Stack: Vite 7 + React 19 + three 0.185 + Tailwind 4; package manager **bun**.
+Estado em hooks puros (`useGraphEditor`); a cena é espelho imperativo do React (ADR-0001).
+Algoritmos = geradores puros de passos + replay integral (ADR-0002); weight obrigatório e independente da distância (ADR-0003).
 
 ## Infra & ambientes
-<!-- Onde roda; o que é self-hosted. ⚠️ Liste ferramentas que NUNCA usar
-     (ex.: "Supabase self-hosted → nunca usar o supabase CLI").
-     Detalhe extenso → docs/context/INFRA.md (ponteiro no mapa abaixo). -->
+Só desenvolvimento local: sem remote, sem CI, sem backend, sem banco. Persistência em `localStorage` (`archigraph:v1`).
+NUNCA: `npm`/`npx` (usar bun) · R3F/SVG para o grafo (ADR-0001) · backend/DB/CI sem ADR.
+Detalhe extenso: `docs/context/INFRA.md`.
 
 ## Como rodar localmente
 ```bash
-# comandos exatos, copiáveis
+bun install
+bun run dev
 ```
 
 ## Como validar (DoD global do repo)
 ```bash
-bun run typecheck        # exit 0
-bun run lint             # sem erros
-bun test                 # tudo verde
+bun run typecheck           # exit 0
+bun run lint                # sem erros
+bun run test                # tudo verde (vitest — não é `bun test`)
+python3 scripts/docs-check  # exit 0 (gate de docs — roda também no pre-commit)
 ```
 
 ## Como deployar
-<!-- Ferramenta/script oficial, ordem, e o que NÃO fazer. -->
+Sem pipeline: `bun run build` → `dist/index.html` único auto-contido (single-file, ADR-0007). Distribuir = copiar esse arquivo. NUNCA commitar `dist/`.
 
 ## Git & PRs
-<!-- Convenções; quando commitar; se há remote; se o agente abre PR sem ser pedido. -->
+Branch `main`, trabalho direto nela — sem remote, sem PRs.
+Hooks husky: pre-commit roda lint + typecheck + docs-check; pre-push roda test.
+Bypass de gate só com `git commit --no-verify` deliberado (e a decisão fica sem trilha).
 
 ## Gotchas
 <!-- Conhecimento NÃO-INFERÍVEL que já custou tentativas falhas. Todo gotcha
      descoberto pelo agente DEVE ser registrado aqui. -->
 
-- 
+- `scripts/docs-reserve` slugifica o título: `*` e acentos somem — "Heurística A*…" vira `heuristica-a-nao-admissivel-…` no filename (o H1/título exibido mantém o original).
+- O parser de frontmatter do `docs-check` aceita só YAML simples (escalar, lista inline `[...]`, lista em bloco) — sintaxe além disso é **erro**, nunca ignorado.
+- `builds-on` exige o prefixo (`ADR-0005`, não `0005`) — número nu vira "doc inexistente".
+- `bun test` (runner embutido do bun) ≠ `bun run test` (script do repo = vitest). Os gates e o DoD usam `bun run test`.
+- `tsc -b` pode reexibir erro já corrigido a partir de `tsconfig.tsbuildinfo` antigo — limpar o arquivo se o erro não bater com o código.
+- `biome.json` manda tab e `.editorconfig` manda 2 espaços: o biome vence; não "corrigir" o .editorconfig sem ADR.
 
 ## Mapa de contexto
 <!-- Índice dos capítulos (docs/context/), cada um com QUANDO carregar.
@@ -51,7 +64,8 @@ bun test                 # tudo verde
 
 | Capítulo | Quando carregar |
 |---|---|
-| (nenhum ainda) | — |
+| `docs/context/CONVENTIONS.md` | ao alterar código, modelar dados, adicionar algoritmo ou testar |
+| `docs/context/INFRA.md` | ao rodar, buildar, distribuir ou mexer na toolchain/git |
 
 ## Mapa de docs
 - Decisões: `docs/adr/` · Comportamento: `docs/specs/` (READMEs GERADOS — não editar)

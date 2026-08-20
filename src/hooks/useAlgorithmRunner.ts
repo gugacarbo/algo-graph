@@ -10,7 +10,9 @@ interface RunMeta {
   targetId?: string;
 }
 
-const BASE_DELAY_MS = 680;
+// Base delay per step; each speed label divides it (delay = base / speed).
+// Was 680 — now 680/5 (5x faster playback) without touching the speed labels.
+const BASE_DELAY_MS = 136;
 
 export interface AlgorithmRunner {
   status: RunnerStatus;

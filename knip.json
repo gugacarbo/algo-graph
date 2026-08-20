@@ -1,4 +1,6 @@
 {
 	"$schema": "https://unpkg.com/knip@6/schema.json",
-	"includeEntryExports": true
+	"includeEntryExports": true,
+	"ignore": ["src/components/ui/**", "src/lib/utils.ts"],
+	"ignoreDependencies": ["@base-ui/react", "class-variance-authority", "clsx", "lucide-react", "tailwind-merge"]
 }

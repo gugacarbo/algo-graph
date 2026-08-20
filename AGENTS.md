@@ -15,14 +15,14 @@ casa-standard-ref: 7cdb964                 # versão do casa-standard de origem 
 
 ## Contexto em 5 linhas
 ArchiGraph: editor 3D de grafos de arquitetura (cena WebGL three.js) para desenhar grafos com `weight` ≠ distância 3D e animar passo a passo buscas (BFS, DFS, Dijkstra, A*).
-Uso local/educacional: build single-file `dist/index.html` — sem backend, sem CI, sem remote.
+Uso local/educacional: build single-file `dist/index.html` — sem backend, sem banco; CI/deploy em GitHub Actions → Pages (ADR-0009).
 Stack: Vite 7 + React 19 + three 0.185 + Tailwind 4; package manager **bun**.
 Estado em hooks puros (`useGraphEditor`); a cena é espelho imperativo do React (ADR-0001).
 Algoritmos = geradores puros de passos + replay integral (ADR-0002); weight obrigatório e independente da distância (ADR-0003).
 
 ## Infra & ambientes
-Só desenvolvimento local: sem remote, sem CI, sem backend, sem banco. Persistência em `localStorage` (`archigraph:v1`).
-NUNCA: `npm`/`npx` (usar bun) · R3F/SVG para o grafo (ADR-0001) · backend/DB/CI sem ADR.
+Remote `origin` (github.com/gugacarbo/algo-graph, público) + CI/deploy GitHub Actions → GitHub Pages (ADR-0009). Sem backend, sem banco. Persistência em `localStorage` (`archigraph:v1`).
+NUNCA: `npm`/`npx` (usar bun) · R3F/SVG para o grafo (ADR-0001) · backend/DB sem ADR.
 Detalhe extenso: `docs/context/INFRA.md`.
 
 ## Como rodar localmente
@@ -40,10 +40,11 @@ python3 scripts/docs-check  # exit 0 (gate de docs — roda também no pre-commi
 ```
 
 ## Como deployar
-Sem pipeline: `bun run build` → `dist/index.html` único auto-contido (single-file, ADR-0007). Distribuir = copiar esse arquivo. NUNCA commitar `dist/`.
+Push em `main` → CI roda o DoD e publica em GitHub Pages: `https://gugacarbo.github.io/algo-graph/` (ADR-0009).
+O build continua single-file (`dist/index.html`, ADR-0007) — abre direto, inclusive via `file://`. NUNCA commitar `dist/`.
 
 ## Git & PRs
-Branch `main`, trabalho direto nela — sem remote, sem PRs.
+Branch `main`, trabalho direto nela; remote `origin` no GitHub — push em `main` publica no Pages (ADR-0009). Sem PRs.
 Hooks husky: pre-commit roda lint + typecheck + docs-check; pre-push roda test.
 Bypass de gate só com `git commit --no-verify` deliberado (e a decisão fica sem trilha).
 

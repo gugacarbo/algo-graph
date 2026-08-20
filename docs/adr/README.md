@@ -9,3 +9,4 @@
 | [ADR-0003](0003-weight-obrigatorio-e-independente-da-distancia-3d.md) | Weight obrigatório e independente da distância 3D | accepted |
 | [ADR-0004](0004-heuristica-a-nao-admissivel-como-escolha-pedagogica.md) | Heurística A* não-admissível como escolha pedagógica | accepted |
 | [ADR-0005](0005-force-layout-3d-deterministico-sob-demanda-agnostico-de-peso.md) | Force layout 3D determinístico sob demanda, agnóstico de peso | accepted |
+| [ADR-0009](0009-ci-em-github-actions-com-deploy-para-github-pages.md) | CI em GitHub Actions com deploy para GitHub Pages | accepted |

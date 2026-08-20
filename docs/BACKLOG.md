@@ -16,3 +16,4 @@ formato da tabela é apontada pelo comando, nunca lida em silêncio.
 | 0006 | Force layout 3D determinístico sob demanda, agnóstico de peso | 2026-08-19 | em uso |
 | 0007 | Build single-file com vite-plugin-singlefile e bun | 2026-08-19 | em uso |
 | 0008 | Adoção do CASA Standard 1.8 como contrato de docs | 2026-08-19 | em uso |
+| 0009 | CI em GitHub Actions com deploy para GitHub Pages | 2026-08-20 | em uso |

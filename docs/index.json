@@ -58,5 +58,15 @@
     ],
     "superseded-by": null,
     "implemented-by": []
+  },
+  {
+    "id": "ADR-0009",
+    "path": "docs/adr/0009-ci-em-github-actions-com-deploy-para-github-pages.md",
+    "layer": "adr",
+    "title": "CI em GitHub Actions com deploy para GitHub Pages",
+    "status": "accepted",
+    "builds-on": [],
+    "superseded-by": null,
+    "implemented-by": []
   }
 ]
